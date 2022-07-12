@@ -123,7 +123,12 @@ class Proxy(ProxyType("ProxyBase", (object,), {})):
 
     @property
     def path(self):
-        path = self.parse_result.path
+        ## siebel server name here
+        if self.parse_result.fragment.endswith("sbldev"):
+            path = self.parse_result.path + "#" + self.parse_result.fragment
+        else:
+            path = self.parse_result.path
+
         if path == "":
             return "/"
         return "/" if path == "/" else path.rstrip("/")
@@ -142,7 +147,10 @@ class Proxy(ProxyType("ProxyBase", (object,), {})):
 
     def set_url(self, string):
         """ useful for recycling a stateful proxy """
+        # string = string.replace("##", "TWOHASHES")
         self.parse_result = Proxy.parse(string)
+        # setattr(self.parse_result, 'path', self.parse_result.path + self.parse_result.fragment)
+        # print("set url", self.parse_result)
 
     @classmethod
     def from_string(cls, string, exists=False, asynchronous=False, verbose=False):
@@ -234,9 +242,9 @@ class Proxy(ProxyType("ProxyBase", (object,), {})):
     def do_copy(self, dst, opname):
         if self.verbose:
             if self.asynchronous:
-                print("%sing (asynchronously) from %s to %s" % (opname, self.url, dst.url))
+                print("%sing (asynchronously) from %s to %s. Child: %s" % (opname, self.url, dst.url, self.read_path()))
             else:
-                print("%sing from %s to %s" % (opname, self.url, dst.url))
+                print("%sing from %s to %s. Child: %s" % (opname, self.url, dst.url, self.read_path()))
 
         dst.write_path(self.read_path())
 
@@ -316,6 +324,7 @@ class ZKProxy(Proxy):
         if self.client.exists(self.path):
             try:
                 value = self.get_value(self.path)
+                print("write_path", path_value.value)
                 if path_value.value != value:
                     self.client.set(self.path, path_value.value)
             except NoAuthError:
@@ -325,6 +334,7 @@ class ZKProxy(Proxy):
                 # Kazoo's create() doesn't handle acl=[] correctly
                 # See: https://github.com/python-zk/kazoo/pull/164
                 acl = acl or None
+                print('path unexistent')
                 self.client.create(self.path, path_value.value, acl=acl, makepath=True)
             except NoAuthError:
                 raise AuthError("create", self.path)
@@ -489,12 +499,23 @@ class JSONProxy(Proxy):
         if self.exists is not None:
             self.check_path()
 
+    def writeDict(dct, file):
+        for key, value in dct.items(): 
+            file.write('%s:%s\n' % (key, value))
+
     def __exit__(self, etype, value, traceback):
         if not self._dirty:
             return
 
         with open(self.host, "w") as fph:
-            json.dump(self._tree, fph, indent=4)
+            # try:
+            fph.write("{")
+            for key, value in self._tree.items(): 
+                fph.write('"%s":%s,\n' % (key, value))
+            fph.write("}")
+                # json.dump(self._tree, fph, indent=4)
+            # except TypeError:
+                # print("Error dumping", self._tree)
 
     @property
     def host(self):
@@ -518,10 +539,14 @@ class JSONProxy(Proxy):
         return PathValue(value, acl)
 
     def write_path(self, path_value):
+        print('write path for', self.path)
         content = path_value.value_as_bytes
         if content is not None:
             try:
-                content = b64encode(content).decode(encoding="utf-8")
+                #  pass
+                # print('decoded?:', content)
+                content = b64decode(b64encode(content).decode(encoding="utf-8"))
+                # print('decoded?:', content)
             except:
                 print("Failed to b64encode %s" % self.path)
 

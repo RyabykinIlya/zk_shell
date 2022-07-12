@@ -38,6 +38,8 @@ tl;dr
 A powerful & scriptable shell for `Apache
 ZooKeeper <http://zookeeper.apache.org/>`__
 
+Впилен костыль, который даёт адекватно (не совсем) экспортировать (mirror) конфигурацию Siebel Gateway
+
 Installing
 ~~~~~~~~~~
 
